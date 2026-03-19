@@ -67,6 +67,9 @@ const App: React.FC = () => {
   const compactMode = useAppStore((s) => s.compactMode);
   const superFocus = useSuperFocus();
 
+  // 🖥️ Detect if running in Electron
+  const isElectron = typeof window !== 'undefined' && window.electronAPI;
+
   // 🎮 Discord Rich Presence
   useDiscordPresence(activePage);
 
@@ -258,6 +261,7 @@ const App: React.FC = () => {
   const { studySession, setStudySessionOpen, handleIncomingCall, personalCall, handleIncomingPersonalCall } = useAppStore();
 
   const [isSignup, setIsSignup] = useState(false);
+  const [portfolioAutoLogin, setPortfolioAutoLogin] = useState(false);
 
   // 🌙 Messaging store
   const currentUser = useMessageStore((s) => s.currentUser);
@@ -265,6 +269,7 @@ const App: React.FC = () => {
   const subscribeToUsers = useMessageStore((s) => s.subscribeToUsers);
   const subscribeToMessages = useMessageStore((s) => s.subscribeToMessages);
   const initAuth = useMessageStore((s) => s.initAuth);
+  const login = useMessageStore((s) => s.login);
   const isLoading = useMessageStore((s) => s.isLoading);
 
   // 🌙 Mobile drawer
@@ -328,7 +333,9 @@ const App: React.FC = () => {
     collectionName: 'focus-state',
     store: useFocusStore,
     selector: (state) => ({
-      environment: state.environment,
+      savedEnvironmentIds: state.savedEnvironmentIds,
+      activeEnvironmentId: state.activeEnvironmentId,
+      environmentVolume: state.environmentVolume,
       tasks: state.tasks,
       focusMode: state.focusMode,
       // Don't sync functions or runtime state
@@ -374,6 +381,26 @@ const App: React.FC = () => {
       clearTimeout(timer);
     };
   }, []);
+
+  // 🌐 Portfolio Auto-Login: skip login screen when loaded with ?portfolioKey=<key>
+  useEffect(() => {
+    if (isLoading || currentUser) return; // Wait for auth to settle, skip if already logged in
+
+    const params = new URLSearchParams(window.location.search);
+    const portfolioKey = params.get('portfolioKey');
+    const expectedKey = import.meta.env.VITE_PORTFOLIO_KEY;
+    const portfolioEmail = import.meta.env.VITE_PORTFOLIO_EMAIL;
+    const portfolioPassword = import.meta.env.VITE_PORTFOLIO_PASSWORD;
+
+    if (portfolioKey && expectedKey && portfolioKey === expectedKey && portfolioEmail && portfolioPassword) {
+      setPortfolioAutoLogin(true);
+      login(portfolioEmail, portfolioPassword)
+        .catch((err) => {
+          console.error('Portfolio auto-login failed:', err);
+          setPortfolioAutoLogin(false);
+        });
+    }
+  }, [isLoading, currentUser]);
 
   // Messaging Subscriptions
   // 1. Subscribe to Users
@@ -502,8 +529,8 @@ const App: React.FC = () => {
     }
   }, [activePage, handleAppClick]);
 
-  // LOADING STATE
-  if (isLoading) {
+  // LOADING STATE (also shown during portfolio auto-login)
+  if (isLoading || portfolioAutoLogin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#111217]">
         <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -542,9 +569,9 @@ const App: React.FC = () => {
       ) : (
         /* Content Wrapper (z-10) */
         <div className="relative z-10 flex flex-col h-full min-h-screen">
-          {/* Hide TitleBar in Super Focus Mode */}
+          {/* Hide TitleBar in Super Focus Mode and in browser mode */}
           <AnimatePresence>
-            {!superFocus.isActive && (
+            {!superFocus.isActive && isElectron && (
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}

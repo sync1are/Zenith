@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Sparkles, Trash2, Plus, Pin, Check, X, FolderOpen, Grid3X3, PlusCircle, Target, Loader2 } from 'lucide-react';
 import { useGoalStore } from '../store/useGoalStore';
+import { callOllamaCloud } from '../services/ollamaCloudService';
 
 // --- TYPES ---
 export interface Subgoal {
@@ -26,44 +27,20 @@ export interface Album {
 }
 
 // --- AI SERVICE ---
-const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || "";
-
 export const generateSubgoalsForGoal = async (goalTitle: string, userInstruction: string): Promise<string[]> => {
-    if (!API_KEY) {
-        console.warn("No API key configured, using fallback");
-        return ["Research the topic", "Create a detailed plan", "Execute first step", "Review and iterate"];
-    }
-
     try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${API_KEY}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "",
-                "X-Title": "Lumen Goal Planner",
-            },
-            body: JSON.stringify({
-                model: "openai/gpt-3.5-turbo",
-                messages: [{
-                    role: "user",
-                    content: `Goal: "${goalTitle}"
+        const response = await callOllamaCloud([{
+            role: "user",
+            content: `Goal: "${goalTitle}"
 User instruction: "${userInstruction}"
 
 Generate 3-5 actionable sub-goals (steps) for this goal based on the user's instruction.
 Keep each step concise (under 10 words).
 Return ONLY a JSON array of strings, no other text.
 Example: ["Step one", "Step two", "Step three"]`
-                }],
-                max_tokens: 500,
-            })
-        });
+        }], 500);
 
-        if (!response.ok) throw new Error(`API Error: ${response.status}`);
-
-        const data = await response.json();
-        const content = data.choices[0].message.content;
-        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        const jsonMatch = response.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
             return JSON.parse(jsonMatch[0]);
         }

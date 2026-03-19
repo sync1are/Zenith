@@ -1,6 +1,5 @@
 import { Task, TaskPriority, TaskStatus } from '../types';
-
-const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || "";
+import { callOllamaCloud } from './ollamaCloudService';
 
 interface GenerateTaskResponse {
     task: {
@@ -15,30 +14,15 @@ interface GenerateTaskResponse {
 }
 
 export const generateTaskPlan = async (prompt: string): Promise<Task[]> => {
-    if (!API_KEY) {
-        throw new Error("⚠️ API Key not configured. Add your OpenRouter API key to .env file as VITE_OPENROUTER_API_KEY");
-    }
-
     try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${API_KEY}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": window.location.origin,
-                "X-Title": "Lumen AI Task Planner",
+        const messages = [
+            {
+                role: "system" as const,
+                content: "You are a task planning assistant. Generate ONLY valid JSON with no markdown, explanations, or code blocks."
             },
-            body: JSON.stringify({
-                model: "openai/gpt-oss-20b:free", // Using GPT-OSS via OpenRouter
-                max_tokens: 2000,
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are a task planning assistant. Generate ONLY valid JSON with no markdown, explanations, or code blocks."
-                    },
-                    {
-                        role: "user",
-                        content: `Generate a structured task breakdown for the user's goal.
+            {
+                role: "user" as const,
+                content: `Generate a structured task breakdown for the user's goal.
 
 Format:
 {
@@ -56,18 +40,10 @@ Format:
 User's goal: ${prompt}
 
 Generate actionable subtasks as per required with realistic durations.`
-                    }
-                ]
-            })
-        });
+            }
+        ];
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error?.message || `API Error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        let text = data.choices[0].message.content.trim();
+        let text = await callOllamaCloud(messages, 2000);
 
         // Remove markdown code blocks if present
         text = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();

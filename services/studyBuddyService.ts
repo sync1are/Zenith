@@ -1,7 +1,7 @@
 // Alex Study Buddy AI Service - Simple Version
 // Basic AI chat for study tips and motivation
 
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || "";
+import { callOllamaCloud } from './ollamaCloudService';
 
 export interface ChatMessage {
     id: number;
@@ -30,8 +30,7 @@ export async function getChatResponse(
     chatHistory: ChatMessage[] = []
 ): Promise<string> {
     try {
-        // Prepare messages for API
-        const messages = [
+        const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
             { role: "system", content: SYSTEM_PROMPT },
             ...chatHistory.slice(-10).map(msg => ({
                 role: msg.role,
@@ -40,29 +39,7 @@ export async function getChatResponse(
             { role: "user", content: message }
         ];
 
-        // Call OpenRouter API
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": window.location.origin,
-                "X-Title": "Alex Study Buddy",
-            },
-            body: JSON.stringify({
-                model: "openai/gpt-oss-20b:free",
-                max_tokens: 500,
-                messages
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error?.message || `API Error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data.choices[0].message.content;
+        return await callOllamaCloud(messages, 500);
 
     } catch (error: any) {
         console.error("Alex chat error:", error);

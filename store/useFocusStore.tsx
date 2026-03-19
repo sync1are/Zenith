@@ -70,7 +70,7 @@ export const useFocusStore = create<FocusStore>()(
       timerActive: false,
 
       savedEnvironmentIds: DEFAULT_SAVED_IDS,
-      activeEnvironmentId: null,
+      activeEnvironmentId: 'env-12', // Tropical Beach as default
       environmentVolume: 0.5,
 
       setTasks: (tasks) => set({ tasks }),

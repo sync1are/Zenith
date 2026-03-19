@@ -1,4 +1,4 @@
-const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || "";
+import { callOllamaCloud } from './ollamaCloudService';
 
 interface TaskPlan {
     summary: string;
@@ -9,31 +9,7 @@ interface TaskPlan {
 }
 
 async function callOpenRouter(messages: Array<{ role: string; content: string }>): Promise<string> {
-    if (!API_KEY) {
-        throw new Error("API Key not configured");
-    }
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${API_KEY}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "",
-            "X-Title": "Lumen AI Task Planner",
-        },
-        body: JSON.stringify({
-            model: "openai/gpt-3.5-turbo",
-            messages,
-            max_tokens: 1000,
-        })
-    });
-
-    if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
+    return callOllamaCloud(messages as any, 1000);
 }
 
 export async function breakDownTask(taskTitle: string): Promise<TaskPlan | null> {
