@@ -29,5 +29,8 @@ build/
 out/
 *.exe
 
+# Environment variables
+.env
+
 # Whisper models (too large for GitHub, downloaded on first run)
 services/whisper_models/
