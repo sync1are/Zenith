@@ -4,8 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useJournalStore } from '../store/useJournalStore';
-import { useSettingsStore } from '../store/useSettingsStore';
 import { JournalTopic, JournalEntry } from '../types';
+import { cleanJournalTranscription } from '../services/ollamaCloudService';
 import {
     Plus, Search, Calendar, BarChart3, ChevronRight, ChevronLeft,
     MoreVertical, Edit3, Trash2, Pin, X, Flame, BookOpen, Sparkles,
@@ -369,10 +369,6 @@ const QuickLogFAB: React.FC<QuickLogFABProps> = ({ topics, onQuickSave, onOpenEd
     const [error, setError] = useState<string | null>(null);
     const [whisperAvailable, setWhisperAvailable] = useState(false);
 
-    // Get AI settings from store
-    const ollamaApiKey = useSettingsStore((s) => s.ollamaApiKey);
-    const enableLlmCleanup = useSettingsStore((s) => s.enableLlmCleanup);
-
     const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
     const audioChunksRef = React.useRef<Blob[]>([]);
 
@@ -464,17 +460,19 @@ const QuickLogFAB: React.FC<QuickLogFABProps> = ({ topics, onQuickSave, onOpenEd
 
             // Check if Electron API is available
             if ((window as any).electronAPI?.whisper) {
-                const result = await (window as any).electronAPI.whisper.transcribe(arrayBuffer, {
-                    apiKey: ollamaApiKey,
-                    enableCleanup: enableLlmCleanup
-                });
+                const result = await (window as any).electronAPI.whisper.transcribe(arrayBuffer);
 
                 if (result.error) {
                     console.error('Transcription error:', result.error);
                     setError(result.error);
                 } else if (result.text) {
-                    // Append transcribed text (cleaned if LLM cleanup is enabled)
-                    setQuickNote(prev => (prev + ' ' + result.text).trim());
+                    try {
+                        const cleanedText = await cleanJournalTranscription(result.text);
+                        setQuickNote(prev => (prev + ' ' + cleanedText).trim());
+                    } catch (cleanupError) {
+                        console.error('Cleanup error:', cleanupError);
+                        setQuickNote(prev => (prev + ' ' + result.text).trim());
+                    }
                 }
             } else {
                 setError('Whisper service not available. Run in Electron.');

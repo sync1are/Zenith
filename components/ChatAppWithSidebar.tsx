@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { Search, Phone, Video, MoreVertical, Paperclip, Smile, Mic, Send, ArrowLeft, MessageSquare, Users, Settings, Bell } from 'lucide-react';
+import { callOllamaCloud } from '../services/ollamaCloudService';
 
 // --- TYPES ---
 
@@ -36,48 +36,24 @@ export const CURRENT_USER_ID = 'me';
 
 type NavSection = 'messages' | 'groups' | 'notifications' | 'settings';
 
-// --- SERVICE ---
-
-let aiClient: GoogleGenAI | null = null;
-
-const getClient = () => {
-    if (!aiClient) {
-        const apiKey = process.env.API_KEY;
-        if (apiKey) {
-            aiClient = new GoogleGenAI({ apiKey });
-        }
-    }
-    return aiClient;
-};
-
 export const generateAIResponse = async (
     prompt: string,
     history: { role: 'user' | 'model'; parts: { text: string }[] }[]
 ): Promise<string> => {
-    const client = getClient();
-    if (!client) {
-        return "I'm offline right now (API Key missing).";
-    }
-
-    try {
-        const model = client.models;
-        // Using flash for quick conversational responses
-        const response = await model.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [
-                ...history,
-                { role: 'user', parts: [{ text: prompt }] }
-            ],
-            config: {
-                systemInstruction: "You are 'Wealth', a helpful and friendly friend in a chat app. Keep your responses concise, casual, and conversational, like a text message. Don't be too formal. Use emojis occasionally.",
-            }
-        });
-
-        return response.text || "...";
-    } catch (error) {
-        console.error("Gemini API Error:", error);
-        return "Sorry, I couldn't process that right now.";
-    }
+    return await callOllamaCloud([
+        {
+            role: 'system',
+            content: "You are 'Wealth', a helpful and friendly friend in a chat app. Keep your responses concise, casual, and conversational, like a text message."
+        },
+        ...history.map((entry) => ({
+            role: entry.role === 'model' ? 'assistant' as const : 'user' as const,
+            content: entry.parts.map((part) => part.text).join('\n')
+        })),
+        {
+            role: 'user',
+            content: prompt
+        }
+    ], 500);
 };
 
 // --- COMPONENTS ---

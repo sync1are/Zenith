@@ -8,6 +8,9 @@ const { initDiscordRPC, setActivity, destroyRPC } = require("./discordRPC.cjs");
 const isDev = !app.isPackaged;
 let mainWindow = null;
 let isSuperFocusMode = false;
+const OLLAMA_CLOUD_URL = "https://ollama.com/api/chat";
+const OLLAMA_CLOUD_MODEL = "qwen3-vl:235b-instruct-cloud";
+const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_API_KEY || "07f74098d2314c138c57ece42116a025.PP-gkCoZVTA8lWLdEIVCovUS";
 
 // Auto-updater configuration
 autoUpdater.autoDownload = false; // Don't auto-download, let user decide
@@ -80,6 +83,46 @@ ipcMain.on('download-update', () => {
 
 ipcMain.on('install-update', () => {
   autoUpdater.quitAndInstall(false, true);
+});
+
+async function callOllamaCloud({ messages, format, maxTokens = 2000, temperature = 0.3 }) {
+  if (!OLLAMA_API_KEY) {
+    throw new Error("OLLAMA_API_KEY is not configured.");
+  }
+
+  const response = await fetch(OLLAMA_CLOUD_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${OLLAMA_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: OLLAMA_CLOUD_MODEL,
+      messages,
+      format,
+      stream: false,
+      options: {
+        temperature,
+        num_predict: maxTokens,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Ollama Cloud request failed: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  return {
+    model: data.model || OLLAMA_CLOUD_MODEL,
+    content: data.message?.content || "",
+  };
+}
+
+ipcMain.handle('ai-chat', async (event, payload) => {
+  void event;
+  return await callOllamaCloud(payload);
 });
 
 function createWindow() {
@@ -515,18 +558,11 @@ async function checkWhisperHealth() {
 }
 
 async function transcribeWithWhisper(audioBuffer, options = {}) {
+  void options;
   try {
     const headers = {
       'Content-Type': 'application/octet-stream'
     };
-
-    // Pass options as headers to the Python service
-    if (options.apiKey) {
-      headers['X-Ollama-Api-Key'] = options.apiKey;
-    }
-    if (options.enableCleanup !== undefined) {
-      headers['X-Enable-Cleanup'] = options.enableCleanup ? '1' : '0';
-    }
 
     const response = await fetch(`${WHISPER_URL}/transcribe`, {
       method: 'POST',

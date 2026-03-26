@@ -3,8 +3,6 @@ import { Task, TaskPriority, TaskStatus } from '../../types';
 import { generateTaskPlan } from '../../services/openRouterService';
 import { SparklesIcon } from '../icons/IconComponents';
 
-// OpenRouter API key
-
 
 interface TaskModalProps {
     isOpen: boolean;

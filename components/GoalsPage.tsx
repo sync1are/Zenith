@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Sparkles, Trash2, Plus, Pin, Check, X, FolderOpen, Grid3X3, PlusCircle, Target, Loader2 } from 'lucide-react';
 import { useGoalStore } from '../store/useGoalStore';
-import { callOllamaCloud } from '../services/ollamaCloudService';
+import { callOllamaCloudJson } from '../services/ollamaCloudService';
 
 // --- TYPES ---
 export interface Subgoal {
@@ -29,22 +29,21 @@ export interface Album {
 // --- AI SERVICE ---
 export const generateSubgoalsForGoal = async (goalTitle: string, userInstruction: string): Promise<string[]> => {
     try {
-        const response = await callOllamaCloud([{
-            role: "user",
-            content: `Goal: "${goalTitle}"
+        return await callOllamaCloudJson<string[]>([
+            {
+                role: "system",
+                content: "You generate concise subgoals. Return only a JSON array of strings."
+            },
+            {
+                role: "user",
+                content: `Goal: "${goalTitle}"
 User instruction: "${userInstruction}"
 
-Generate 3-5 actionable sub-goals (steps) for this goal based on the user's instruction.
-Keep each step concise (under 10 words).
-Return ONLY a JSON array of strings, no other text.
-Example: ["Step one", "Step two", "Step three"]`
-        }], 500);
-
-        const jsonMatch = response.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
-        }
-        return ["Research the topic", "Create a plan", "Execute first step"];
+Generate 3-5 actionable sub-goals.
+Keep each step concise and specific.
+Return only a JSON array of strings.`
+            }
+        ], 700);
     } catch (error) {
         console.error("Error generating subgoals:", error);
         return ["Research the topic", "Create a detailed plan", "Execute first step"];
@@ -306,7 +305,7 @@ const GoalCard: React.FC<GoalCardProps> = ({
                             className="mt-2 flex items-center gap-1 text-purple-400 hover:text-purple-300 text-xs"
                         >
                             <Sparkles className="w-3 h-3" />
-                            <span>Use AI to plan</span>
+                            <span>Generate quick steps</span>
                         </button>
                     </div>
                 )}

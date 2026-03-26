@@ -26,10 +26,6 @@ type SettingsState = {
 
   // Audio
   clickSoundEnabled: boolean;
-
-  // AI / Ollama
-  ollamaApiKey: string;
-  enableLlmCleanup: boolean;
 };
 
 type SettingsActions = {
@@ -54,10 +50,6 @@ type SettingsActions = {
 
   // Audio
   setClickSoundEnabled: (v: boolean) => void;
-
-  // AI / Ollama
-  setOllamaApiKey: (key: string) => void;
-  setEnableLlmCleanup: (v: boolean) => void;
 
   // Theme Helpers
   applyThemeToDom: (t?: ThemeKey) => void;
@@ -87,10 +79,6 @@ const initial: SettingsState = {
   taskCompletedAlerts: true,
 
   clickSoundEnabled: false,
-
-  // AI / Ollama
-  ollamaApiKey: '',
-  enableLlmCleanup: true,
 };
 
 export const useSettingsStore = create<SettingsState & SettingsActions>()(
@@ -138,12 +126,6 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       // Audio
       // ──────────────────────────────
       setClickSoundEnabled: (v) => set({ clickSoundEnabled: v }),
-
-      // ──────────────────────────────
-      // AI / Ollama
-      // ──────────────────────────────
-      setOllamaApiKey: (key) => set({ ollamaApiKey: key }),
-      setEnableLlmCleanup: (v) => set({ enableLlmCleanup: v }),
 
       // ──────────────────────────────
       // Theme Engine (Core)
@@ -220,8 +202,6 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         desktopNotifications: s.desktopNotifications,
         taskCompletedAlerts: s.taskCompletedAlerts,
         clickSoundEnabled: s.clickSoundEnabled,
-        ollamaApiKey: s.ollamaApiKey,
-        enableLlmCleanup: s.enableLlmCleanup,
       }),
       version: 2,
       migrate: (persisted, version) => {

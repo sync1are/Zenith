@@ -78,6 +78,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.removeAllListeners('update-error');
   },
 
+  // Unified AI bridge
+  ai: {
+    chat: (payload) => ipcRenderer.invoke('ai-chat', payload),
+  },
+
   // Local Whisper Speech-to-Text
   whisper: {
     transcribe: (audioBlob, options) => ipcRenderer.invoke('whisper-transcribe', audioBlob, options),

@@ -1,5 +1,5 @@
 import { Task, TaskPriority, TaskStatus } from '../types';
-import { callOllamaCloud } from './ollamaCloudService';
+import { callOllamaCloudJson, OllamaMessage } from './ollamaCloudService';
 
 interface GenerateTaskResponse {
     task: {
@@ -15,13 +15,13 @@ interface GenerateTaskResponse {
 
 export const generateTaskPlan = async (prompt: string): Promise<Task[]> => {
     try {
-        const messages = [
+        const messages: OllamaMessage[] = [
             {
-                role: "system" as const,
-                content: "You are a task planning assistant. Generate ONLY valid JSON with no markdown, explanations, or code blocks."
+                role: "system",
+                content: "You are a task planning assistant. Generate only valid JSON."
             },
             {
-                role: "user" as const,
+                role: "user",
                 content: `Generate a structured task breakdown for the user's goal.
 
 Format:
@@ -39,36 +39,21 @@ Format:
 
 User's goal: ${prompt}
 
-Generate actionable subtasks as per required with realistic durations.`
+Generate actionable subtasks with realistic durations.`
             }
         ];
 
-        let text = await callOllamaCloud(messages, 2000);
-
-        // Remove markdown code blocks if present
-        text = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
-        // Try to find JSON in the response
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            text = jsonMatch[0];
-        }
-
-        const parsedData = JSON.parse(text) as GenerateTaskResponse;
+        const parsedData = await callOllamaCloudJson<GenerateTaskResponse>(messages, 1400);
 
         if (!parsedData.task || !parsedData.task.title) {
             throw new Error("Invalid response format");
         }
 
-        // Calculate total duration from subtasks
-        const totalMinutes = parsedData.task.subtasks.reduce((sum: number, st: any) => {
-            const match = st.duration.match(/(\d+)\s*(min|hour)/i);
-            if (match) {
-                const value = parseInt(match[1]);
-                const unit = match[2].toLowerCase();
-                return sum + (unit.includes('hour') ? value * 60 : value);
-            }
-            return sum;
+        const totalMinutes = parsedData.task.subtasks.reduce((sum, subtask) => {
+            const match = subtask.duration.match(/(\d+)\s*(min|hour)/i);
+            if (!match) return sum;
+            const value = parseInt(match[1], 10);
+            return sum + (match[2].toLowerCase().includes('hour') ? value * 60 : value);
         }, 0);
 
         const mainTask: Task = {
@@ -79,25 +64,20 @@ Generate actionable subtasks as per required with realistic durations.`
             duration: totalMinutes >= 60
                 ? `${Math.floor(totalMinutes / 60)} hours ${totalMinutes % 60} min`
                 : `${totalMinutes} min`,
-            remainingTime: totalMinutes * 60, // Added remainingTime
+            remainingTime: totalMinutes * 60,
             status: TaskStatus.TODO,
             isCompleted: false,
-            subtasks: parsedData.task.subtasks.map((st: any, index: number) => ({
-                id: Date.now() + index + 1, // Offset ID to avoid collision
-                title: st.title,
-                duration: st.duration,
+            subtasks: parsedData.task.subtasks.map((subtask, index) => ({
+                id: Date.now() + index + 1,
+                title: subtask.title,
+                duration: subtask.duration,
                 isCompleted: false
             }))
         };
 
         return [mainTask];
-
     } catch (err: any) {
-        console.error("AI Generation Error:", err);
-        throw new Error(
-            err.message?.includes("API")
-                ? "⚠️ API Error: Check your API key and quota"
-                : "⚠️ Could not generate tasks. Try rephrasing your prompt."
-        );
+        console.error("Task generation error:", err);
+        throw new Error("Could not generate tasks right now.");
     }
 };

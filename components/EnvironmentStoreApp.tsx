@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useFocusStore } from '../store/useFocusStore';
 import { ENVIRONMENTS, Environment, MAX_SELECTION } from '../data/environments';
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { callOllamaCloudJson } from '../services/ollamaCloudService';
 
 // =============================================================================
 // AI CURATOR SERVICE
@@ -23,28 +23,34 @@ import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 const getSmartSelection = async (mood: string): Promise<string[]> => {
     try {
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-        if (!apiKey) return [];
-
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: SchemaType.ARRAY,
-                    items: { type: SchemaType.STRING }
-                }
-            }
-        });
-
-        const availableEnvList = ENVIRONMENTS.map(e => ({
-            id: e.id, title: e.title, description: e.description, tags: e.tags.join(", ")
+        const available = ENVIRONMENTS.map((environment) => ({
+            id: environment.id,
+            title: environment.title,
+            description: environment.description,
+            tags: environment.tags,
+            category: environment.category,
         }));
 
-        const prompt = `Select exactly 6 environment IDs from this list that best match the mood "${mood}": ${JSON.stringify(availableEnvList)}. Return ONLY a JSON array of ID strings.`;
-        const result = await model.generateContent(prompt);
-        return JSON.parse(result.response.text() || '[]');
+        const ids = await callOllamaCloudJson<string[]>([
+            {
+                role: "system",
+                content: "You curate focus environments. Return only a JSON array of exactly 6 valid IDs from the provided list."
+            },
+            {
+                role: "user",
+                content: `Mood: "${mood}"
+Available environments: ${JSON.stringify(available)}
+
+Select exactly 6 IDs that best match the mood.
+Return only a JSON array of IDs.`
+            }
+        ], 900);
+
+        const validIds = ids.filter((id) => available.some((environment) => environment.id === id));
+        const remainingIds = available
+            .map((environment) => environment.id)
+            .filter((id) => !validIds.includes(id));
+        return [...validIds, ...remainingIds].slice(0, 6);
     } catch {
         return [];
     }
@@ -457,7 +463,7 @@ const SelectionDock: React.FC<SelectionDockProps> = ({ selectedEnvs, maxSlots, o
                         className="flex items-center gap-1.5 bg-white/8 hover:bg-white/12 text-white/70 px-3.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border border-white/6"
                     >
                         <Sparkles size={11} />
-                        AI Mix
+                        Quick Mix
                     </button>
                 </div>
             </div>
@@ -497,7 +503,7 @@ const AICuratorModal: React.FC<AICuratorModalProps> = ({ isOpen, onClose, onAppl
                 setError('Could not find enough matches. Try different keywords.');
             }
         } catch {
-            setError('AI service unavailable. Please try again.');
+                setError('Could not build a mix. Please try again.');
         } finally {
             setIsLoading(false);
         }

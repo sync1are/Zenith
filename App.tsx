@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Youtube, Calculator, StickyNote, Music, Globe, Sparkles, MessageCircle } from "lucide-react";
+import { Youtube, Calculator, StickyNote, Music, Globe, Sparkles, MessageCircle, PenTool } from "lucide-react";
 
 // UI Components
 import Sidebar from "./components/Sidebar";
@@ -7,12 +7,10 @@ import Header from "./components/Header";
 import TitleBar from "./components/TitleBar";
 import NotificationSystem from "./components/Notifications";
 import TopNavBar from "./components/TopNavBar";
-import { Dock } from "./components/Dock";
-import { AllAppsPopup } from "./components/AllAppsPopup";
-import { ContextMenu } from "./components/ContextMenu";
 import { Window } from "./components/Window";
 import { BrowserApp } from "./components/BrowserApp";
 import { CalculatorApp } from "./components/CalculatorApp";
+import WhiteboardApp from "./components/WhiteboardApp";
 import EnvironmentStoreApp from "./components/EnvironmentStoreApp";
 
 // Pages
@@ -81,19 +79,8 @@ const App: React.FC = () => {
   const [windowZIndices, setWindowZIndices] = useState<Record<string, number>>({});
   const [windowModes, setWindowModes] = useState<Record<string, 'normal' | 'maximized' | 'left' | 'right'>>({});
   const [windowPositions, setWindowPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [showCalculatorLauncher, setShowCalculatorLauncher] = useState(false);
   const baseZIndex = 1000;
-
-  // ✨ All Apps Popup State
-  const [isAllAppsOpen, setIsAllAppsOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{
-    isOpen: boolean;
-    position: { x: number; y: number };
-    appId: string | null;
-  }>({ isOpen: false, position: { x: 0, y: 0 }, appId: null });
-
-  // Get pinned apps from store
-  const pinnedAppIds = useAppStore((s) => s.pinnedAppIds);
-  const togglePinApp = useAppStore((s) => s.togglePinApp);
 
   // 🎯 Mini-Apps Configuration
   const dockApps = React.useMemo(() => [
@@ -124,9 +111,17 @@ const App: React.FC = () => {
       id: 'calculator',
       title: 'Calculator',
       icon: Calculator,
-      width: 320,
-      height: 480,
+      width: 980,
+      height: 760,
       component: <CalculatorApp />
+    },
+    {
+      id: 'whiteboard',
+      title: 'Whiteboard',
+      icon: PenTool,
+      width: 1200,
+      height: 820,
+      component: <WhiteboardApp />
     },
     {
       id: 'notes',
@@ -175,15 +170,6 @@ const App: React.FC = () => {
       component: <MessagesApp />
     },
   ], []);
-
-  // Filter dock apps to show only pinned ones (or all if none pinned)
-  const visibleDockApps = React.useMemo(() => {
-    if (pinnedAppIds.length === 0) {
-      // Default to first 6 apps if none pinned
-      return dockApps.slice(0, 6);
-    }
-    return dockApps.filter(app => pinnedAppIds.includes(app.id));
-  }, [dockApps, pinnedAppIds]);
 
   // Handle window actions
   const handleAppClick = useCallback((appId: string) => {
@@ -252,6 +238,42 @@ const App: React.FC = () => {
       if (prev[appId] === maxZ) return prev;
       return { ...prev, [appId]: maxZ + 1 };
     });
+  }, []);
+
+  useEffect(() => {
+    let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const isNearBottomRight =
+        event.clientX >= window.innerWidth - 180 &&
+        event.clientY >= window.innerHeight - 160;
+
+      if (isNearBottomRight) {
+        if (hideTimeout) {
+          clearTimeout(hideTimeout);
+          hideTimeout = null;
+        }
+        setShowCalculatorLauncher(true);
+        return;
+      }
+
+      if (hideTimeout) {
+        clearTimeout(hideTimeout);
+      }
+
+      hideTimeout = setTimeout(() => {
+        setShowCalculatorLauncher(false);
+      }, 220);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (hideTimeout) {
+        clearTimeout(hideTimeout);
+      }
+    };
   }, []);
 
   // 🌙 Migration state
@@ -703,57 +725,38 @@ const App: React.FC = () => {
             />
           ))}
 
-          {/* 🚀 Dock */}
+          {/* Utility Launcher */}
           <AnimatePresence>
-            {!superFocus.isActive && (
-              <Dock
-                apps={visibleDockApps}
-                openAppIds={openWindows}
-                activeAppId={activeWindow}
-                onAppClick={handleAppClick}
-                onLayout={setIconPositions}
-                onAllAppsClick={() => setIsAllAppsOpen(true)}
-                onAppContextMenu={(e, app) => {
-                  e.preventDefault();
-                  setContextMenu({
-                    isOpen: true,
-                    position: { x: e.clientX, y: e.clientY },
-                    appId: app.id
-                  });
-                }}
-              />
+            {!superFocus.isActive && showCalculatorLauncher && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 16 }}
+                transition={{ duration: 0.2 }}
+                className="fixed right-6 bottom-8 z-50 flex flex-col gap-3 rounded-3xl border border-white/15 bg-white/10 p-3 text-white shadow-xl backdrop-blur-xl"
+              >
+                {[
+                  { id: 'calculator', label: 'Calculator', hint: 'Math + convert + graph', icon: <Calculator size={20} /> },
+                  { id: 'whiteboard', label: 'Whiteboard', hint: 'Freeform sketch space', icon: <PenTool size={20} /> },
+                ].map((utility) => (
+                  <button
+                    key={utility.id}
+                    onClick={() => handleAppClick(utility.id)}
+                    className="flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-white transition hover:bg-white/15"
+                  >
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
+                      {utility.icon}
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-white/45">Utility</div>
+                      <div className="text-sm font-medium text-white/90">{utility.label}</div>
+                      <div className="text-xs text-white/45">{utility.hint}</div>
+                    </div>
+                  </button>
+                ))}
+              </motion.div>
             )}
           </AnimatePresence>
-
-          {/* All Apps Popup */}
-          <AllAppsPopup
-            isOpen={isAllAppsOpen}
-            apps={dockApps}
-            pinnedAppIds={pinnedAppIds}
-            onClose={() => setIsAllAppsOpen(false)}
-            onAppClick={handleAppClick}
-            onContextMenu={(e, app) => {
-              e.preventDefault();
-              setContextMenu({
-                isOpen: true,
-                position: { x: e.clientX, y: e.clientY },
-                appId: app.id
-              });
-            }}
-          />
-
-          {/* Context Menu */}
-          <ContextMenu
-            isOpen={contextMenu.isOpen}
-            position={contextMenu.position}
-            isPinned={contextMenu.appId ? pinnedAppIds.includes(contextMenu.appId) : false}
-            onPin={() => {
-              if (contextMenu.appId) {
-                togglePinApp(contextMenu.appId);
-              }
-            }}
-            onClose={() => setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, appId: null })}
-          />
 
         </div>
       )}

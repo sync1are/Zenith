@@ -1,7 +1,6 @@
 """
 Local Whisper Speech-to-Text Service
 Runs on localhost with CUDA acceleration for fast, offline transcription.
-Includes Ollama LLM integration for speech cleanup.
 """
 
 import os
@@ -10,7 +9,6 @@ import json
 import tempfile
 import wave
 import io
-import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 import threading
@@ -28,11 +26,6 @@ PORT = 5678
 MODEL_SIZE = "tiny"  # Options: tiny (fastest), base, small, medium, large-v2, large-v3
 DEVICE = "cuda"  # Use "cpu" if no GPU
 COMPUTE_TYPE = "float16"  # Use "int8" for older GPUs, "float32" for CPU
-
-# Ollama Cloud Configuration
-OLLAMA_MODEL = "gpt-oss:120b"  # Cloud model from ollama.com
-OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY", "")  # Set via environment variable
-ENABLE_LLM_CLEANUP = True  # Set to False to disable LLM cleanup
 
 # Global model instance
 model = None
@@ -62,73 +55,7 @@ def load_model():
         print("[OK] Model loaded on CPU")
 
 
-def cleanup_with_ollama(raw_text: str, api_key: str = "") -> str:
-    """
-    Use Ollama LLM to clean up transcribed speech.
-    Removes self-corrections, filler words, and false starts while keeping natural tone.
-    """
-    if not ENABLE_LLM_CLEANUP or not raw_text.strip():
-        return raw_text
-    
-    prompt = f"""You are a speech-to-text cleanup assistant. Your job is to clean up raw transcribed speech while preserving the speaker's natural voice and tone.
-
-Rules:
-1. Remove self-corrections (e.g., "wait no", "I mean", "actually")  
-2. Keep only the FINAL corrected version of what they meant to say
-3. Remove filler words like "um", "uh", "like" (when used as filler)
-4. Fix obvious grammar issues but keep the casual/natural tone
-5. Do NOT make it sound robotic or formal
-6. Do NOT add information that wasn't there
-7. Do NOT change the meaning or emotion
-8. Keep it concise but natural
-
-Raw transcription:
-"{raw_text}"
-
-Cleaned text (output ONLY the cleaned text, nothing else):"""
-
-    try:
-        # Import ollama library
-        from ollama import Client
-        
-        # Use provided API key, or fall back to environment variable
-        effective_key = api_key or OLLAMA_API_KEY
-        
-        # Create client with cloud host and auth
-        client = Client(
-            host="https://ollama.com",
-            headers={'Authorization': f'Bearer {effective_key}'} if effective_key else {}
-        )
-        
-        messages = [
-            {'role': 'user', 'content': prompt}
-        ]
-        
-        # Use chat (non-streaming for simplicity)
-        response = client.chat(
-            model=OLLAMA_MODEL,
-            messages=messages,
-            stream=False
-        )
-        
-        cleaned = response.get('message', {}).get('content', '').strip()
-        
-        # Remove any quotes the LLM might have added
-        if cleaned.startswith('"') and cleaned.endswith('"'):
-            cleaned = cleaned[1:-1]
-        
-        print(f"[OK] LLM cleanup successful")
-        return cleaned if cleaned else raw_text
-            
-    except ImportError:
-        print("[WARN] Ollama library not installed. Run: pip install ollama")
-        return raw_text
-    except Exception as e:
-        print(f"[WARN] Ollama cleanup failed: {e}")
-        return raw_text
-
-
-def transcribe_audio(audio_data: bytes, language: str = "en", api_key: str = "", enable_cleanup: bool = True) -> dict:
+def transcribe_audio(audio_data: bytes, language: str = "en") -> dict:
     """Transcribe audio bytes to text."""
     global model
     
@@ -163,20 +90,14 @@ def transcribe_audio(audio_data: bytes, language: str = "en", api_key: str = "",
         
         raw_text = full_text.strip()
         
-        # Clean up with Ollama LLM (removes self-corrections, filler words)
-        if enable_cleanup and ENABLE_LLM_CLEANUP:
-            cleaned_text = cleanup_with_ollama(raw_text, api_key)
-        else:
-            cleaned_text = raw_text
-        
         return {
             "success": True,
-            "text": cleaned_text,  # Cleaned version for display
-            "raw_text": raw_text,  # Original transcription
+            "text": raw_text,
+            "raw_text": raw_text,
             "segments": segment_list,
             "language": info.language,
             "language_probability": info.language_probability,
-            "llm_cleaned": cleaned_text != raw_text  # Flag if LLM was used
+            "llm_cleaned": False
         }
     except Exception as e:
         return {"error": str(e)}
@@ -201,7 +122,7 @@ class WhisperHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Ollama-Api-Key, X-Enable-Cleanup")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
     
@@ -232,12 +153,8 @@ class WhisperHandler(BaseHTTPRequestHandler):
                 query = parse_qs(urlparse(self.path).query)
                 language = query.get("language", ["en"])[0]
                 
-                # Get API key and cleanup flag from headers
-                api_key = self.headers.get("X-Ollama-Api-Key", "")
-                enable_cleanup = self.headers.get("X-Enable-Cleanup", "1") == "1"
-                
                 # Transcribe
-                result = transcribe_audio(audio_data, language, api_key, enable_cleanup)
+                result = transcribe_audio(audio_data, language)
                 
                 if "error" in result:
                     self.send_json(result, 500)

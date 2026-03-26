@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
+import { motion, AnimatePresence, Variants, useDragControls } from 'framer-motion';
 import { X, Minus, Maximize2, LayoutPanelLeft, LayoutPanelTop, LayoutPanelLeft as LayoutRight } from 'lucide-react';
 import { AppConfig } from '../types';
 
@@ -128,6 +128,7 @@ export const Window: React.FC<WindowProps> = ({
     const width = app.width || 600;
     const height = app.height || 500;
     const [isDragging, setIsDragging] = useState(false);
+    const dragControls = useDragControls();
 
     const variants = React.useMemo(() => getVariants(width, height, mode, position), [width, height, mode, position]);
 
@@ -141,6 +142,8 @@ export const Window: React.FC<WindowProps> = ({
                     animate="animate"
                     exit="exit"
                     drag
+                    dragListener={false}
+                    dragControls={dragControls}
                     dragMomentum={false}
                     dragElastic={0}
                     dragTransition={{ bounceStiffness: 300, bounceDamping: 20 }}
@@ -222,6 +225,7 @@ export const Window: React.FC<WindowProps> = ({
                         onPointerDown={(e) => {
                             e.stopPropagation();
                             onFocus();
+                            dragControls.start(e);
                         }}
                         onDoubleClick={(e) => {
                             e.stopPropagation();

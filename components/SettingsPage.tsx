@@ -21,9 +21,6 @@ import {
   Trash2,
   RotateCcw,
   Loader2,
-  Brain,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 
 // ============================================
@@ -36,7 +33,6 @@ const CATEGORIES = [
   { id: "focus", label: "Focus", icon: Target, desc: "Productivity" },
   { id: "notifications", label: "Notifications", icon: Bell, desc: "Alerts" },
   { id: "music", label: "Music", icon: Music, desc: "Spotify" },
-  { id: "ai", label: "AI", icon: Brain, desc: "Ollama & Speech" },
   { id: "data", label: "Data", icon: Database, desc: "Export & reset" },
   { id: "account", label: "Account", icon: LogOut, desc: "Session" },
 ] as const;
@@ -329,10 +325,6 @@ const SettingsPage: React.FC = () => {
     setTaskCompletedAlerts,
     clickSoundEnabled,
     setClickSoundEnabled,
-    ollamaApiKey,
-    setOllamaApiKey,
-    enableLlmCleanup,
-    setEnableLlmCleanup,
     resetSettings,
   } = useSettingsStore();
 
@@ -341,7 +333,6 @@ const SettingsPage: React.FC = () => {
   // Confirmation states
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
   const resetApp = useAppStore((s) => s.resetApp);
 
   const onExport = () => {
@@ -555,72 +546,6 @@ const SettingsPage: React.FC = () => {
                 Connect Spotify
               </button>
             )}
-          </div>
-        );
-
-      case "ai":
-        return (
-          <div className="space-y-6">
-            {/* LLM Speech Cleanup Toggle */}
-            <SettingRow
-              label="Speech Cleanup"
-              hint="Use AI to clean up voice transcriptions (remove 'um', 'wait no', etc.)"
-            >
-              <Toggle enabled={enableLlmCleanup} onChange={setEnableLlmCleanup} />
-            </SettingRow>
-
-            {/* Ollama API Key */}
-            <div className="pt-4 border-t border-white/5">
-              <label className="block text-sm font-medium text-[var(--subtle)] mb-2">
-                Ollama Cloud API Key
-              </label>
-              <p className="text-xs text-[var(--subtle)] mb-3">
-                Required for AI speech cleanup. Your key is stored locally and never shared.
-              </p>
-              <div className="relative">
-                <input
-                  type={showApiKey ? "text" : "password"}
-                  value={ollamaApiKey}
-                  onChange={(e) => setOllamaApiKey(e.target.value)}
-                  placeholder="Enter your API key..."
-                  className="
-                    w-full px-4 py-3 pr-12 rounded-xl
-                    bg-white/5 border border-white/10
-                    text-[var(--text)] placeholder:text-[var(--subtle)]
-                    focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]
-                    transition-all duration-200 font-mono text-sm
-                  "
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-white/10 text-[var(--subtle)] transition-colors"
-                  title={showApiKey ? "Hide API key" : "Show API key"}
-                >
-                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {ollamaApiKey && (
-                <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1">
-                  <Check className="h-3 w-3" /> API key saved
-                </p>
-              )}
-            </div>
-
-            {/* Info Box */}
-            <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
-              <div className="flex items-start gap-3">
-                <Brain className="h-5 w-5 text-indigo-400 mt-0.5" />
-                <div>
-                  <p className="font-medium text-[var(--text)]">How it works</p>
-                  <p className="text-sm text-[var(--subtle)] mt-1">
-                    When you use voice-to-text in Journal, your speech is first transcribed by Whisper,
-                    then cleaned up by AI to remove hesitations, self-corrections, and filler words
-                    while keeping your natural tone.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         );
 
