@@ -46,7 +46,7 @@
     "standard-version": "^9.5.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "wait-on": "^9.0.1"
+    "wait-on": "^9.0.4"
   },
   "build": {
     "appId": "com.zenith.app",

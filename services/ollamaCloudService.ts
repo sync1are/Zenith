@@ -16,13 +16,59 @@ interface OllamaChatResponse {
 }
 
 export const OLLAMA_MODEL = "qwen3-vl:235b-instruct-cloud";
+const OLLAMA_CLOUD_URL = "https://ollama.com/api/chat";
 
-function getAiBridge() {
-    const bridge = (window as any)?.electronAPI?.ai;
-    if (!bridge?.chat) {
-        throw new Error("AI bridge unavailable. Run the app in Electron.");
+function isElectronEnvironment(): boolean {
+    return typeof window !== 'undefined' && (window as any)?.electronAPI?.ai?.chat;
+}
+
+function getApiKey(): string {
+    // Try to get from environment variables (Vercel/web deployment)
+    if (typeof process !== 'undefined' && process.env) {
+        return process.env.VITE_OLLAMA_CLOUD_API_KEY || 
+               process.env.OLLAMA_CLOUD_API_KEY || 
+               process.env.OLLAMA_API_KEY || "";
     }
-    return bridge;
+    
+    // Fallback for web environments where process.env might not be available
+    return import.meta.env?.VITE_OLLAMA_CLOUD_API_KEY || "";
+}
+
+async function callOllamaDirectly(
+    messages: OllamaMessage[],
+    maxTokens: number = 2000,
+    format?: "json"
+): Promise<string> {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+        throw new Error("Ollama API key not found. Please set VITE_OLLAMA_CLOUD_API_KEY in your environment.");
+    }
+
+    const response = await fetch(OLLAMA_CLOUD_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: OLLAMA_MODEL,
+            messages,
+            options: {
+                num_predict: maxTokens,
+                temperature: 0.3,
+            },
+            format: format === "json" ? "json" : undefined,
+            stream: false,
+        }),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Ollama API request failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.message?.content || "";
 }
 
 export async function callOllamaCloud(
@@ -30,13 +76,19 @@ export async function callOllamaCloud(
     maxTokens: number = 2000,
     format?: "json"
 ): Promise<string> {
-    const bridge = getAiBridge();
-    const response: OllamaChatResponse = await bridge.chat({
-        messages,
-        maxTokens,
-        format,
-    } as OllamaChatRequest);
-    return response.content || "";
+    // Use Electron bridge if available, otherwise make direct API call
+    if (isElectronEnvironment()) {
+        const bridge = (window as any).electronAPI.ai;
+        const response: OllamaChatResponse = await bridge.chat({
+            messages,
+            maxTokens,
+            format,
+        } as OllamaChatRequest);
+        return response.content || "";
+    } else {
+        // Direct API call for web/Vercel deployment
+        return await callOllamaDirectly(messages, maxTokens, format);
+    }
 }
 
 export async function callOllamaCloudJson<T>(
